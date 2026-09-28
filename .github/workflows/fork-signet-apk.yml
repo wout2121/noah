@@ -11,6 +11,8 @@ on:
       - feat/recurring-payments
     paths:
       - .github/workflows/fork-signet-apk.yml
+      - client/**
+      - bun.lock
 
 permissions:
   contents: read
