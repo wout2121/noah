@@ -43,11 +43,14 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
+      - name: Give Gradle more memory (hosted runners have 16 GB)
+        run: sed -i 's/^org.gradle.jvmargs=.*/org.gradle.jvmargs=-Xmx6g -XX:MaxMetaspaceSize=1g/' client/android/gradle.properties
+
       - name: Build Signet APK (debug-signed)
         env:
           CI_DEBUG_SIGNING: "true"
           SENTRY_DISABLE_AUTO_UPLOAD: "true"
-          NODE_OPTIONS: --max-old-space-size=6144
+          NODE_OPTIONS: --max-old-space-size=4096
         run: bun client build:android:signet:ci:apk
 
       - name: Rename APK
@@ -94,6 +97,9 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
+      - name: Give Gradle more memory (hosted runners have 16 GB)
+        run: sed -i 's/^org.gradle.jvmargs=.*/org.gradle.jvmargs=-Xmx6g -XX:MaxMetaspaceSize=1g/' client/android/gradle.properties
+
       - name: Use fork package name and app name
         run: |
           set -euo pipefail
@@ -130,7 +136,7 @@ jobs:
       - name: Build mainnet APK
         env:
           SENTRY_DISABLE_AUTO_UPLOAD: "true"
-          NODE_OPTIONS: --max-old-space-size=6144
+          NODE_OPTIONS: --max-old-space-size=4096
         run: bun client build:android:mainnet:ci:apk
 
       - name: Clean up signing files
