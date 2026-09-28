@@ -1,4 +1,4 @@
-name: Fork Signet APK
+name: Fork Android APKs
 
 # Debug-signed Signet APK build on GitHub-hosted runners,
 # for testing a branch on a fork without self-hosted runners or signing secrets.
@@ -60,5 +60,92 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: noah-signet-apk
+          path: ${{ steps.apk.outputs.path }}
+          retention-days: 14
+
+  mainnet:
+    # Mainnet build signed with the fork's own key. Uses a separate package name
+    # so it installs next to the official Noah app and has its own wallet.
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      FORK_APP_ID: com.noahwallet.mainnet.recurring
+    steps:
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/.ghcup /opt/hostedtoolcache/CodeQL
+          df -h /
+
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - uses: oven-sh/setup-bun@v2
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Use fork package name and app name
+        run: |
+          set -euo pipefail
+          gradle=client/android/app/build.gradle
+          sed -i "s/applicationId 'com.noahwallet.mainnet'/applicationId '${FORK_APP_ID}'/" "$gradle"
+          sed -i 's/resValue "string", "app_name", "Noah"$/resValue "string", "app_name", "Noah Recurring"/' "$gradle"
+          grep -n "$FORK_APP_ID" "$gradle"
+          grep -n '"Noah Recurring"' "$gradle"
+          # google-services needs a client entry for the new package name.
+          python3 - <<'PY'
+          import copy, json, os
+          path = "client/android/app/src/mainnet/google-services.json"
+          data = json.load(open(path))
+          base = next(c for c in data["client"]
+                      if c["client_info"]["android_client_info"]["package_name"] == "com.noahwallet.mainnet")
+          extra = copy.deepcopy(base)
+          extra["client_info"]["android_client_info"]["package_name"] = os.environ["FORK_APP_ID"]
+          data["client"].append(extra)
+          json.dump(data, open(path, "w"), indent=2)
+          PY
+
+      - name: Configure release signing
+        env:
+          KEYSTORE_BASE64: ${{ secrets.FORK_KEYSTORE_BASE64 }}
+          MYAPP_RELEASE_KEY_ALIAS: ${{ secrets.FORK_KEY_ALIAS }}
+          MYAPP_RELEASE_STORE_PASSWORD: ${{ secrets.FORK_KEYSTORE_PASSWORD }}
+          MYAPP_RELEASE_KEY_PASSWORD: ${{ secrets.FORK_KEYSTORE_PASSWORD }}
+        run: |
+          set -euo pipefail
+          echo "$KEYSTORE_BASE64" | base64 -d > client/android/app/release.keystore
+          test -s client/android/app/release.keystore
+          ./scripts/create_local_properties.sh
+
+      - name: Build mainnet APK
+        env:
+          SENTRY_DISABLE_AUTO_UPLOAD: "true"
+          NODE_OPTIONS: --max-old-space-size=6144
+        run: bun client build:android:mainnet:ci:apk
+
+      - name: Clean up signing files
+        if: ${{ always() }}
+        run: rm -f client/android/app/release.keystore client/android/local.properties
+
+      - name: Rename APK
+        id: apk
+        run: |
+          out="noah-recurring-mainnet-$(git rev-parse --short HEAD).apk"
+          mv client/android/app/build/outputs/apk/mainnet/release/app-mainnet-release.apk "$out"
+          echo "path=$out" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: noah-mainnet-apk
           path: ${{ steps.apk.outputs.path }}
           retention-days: 14
