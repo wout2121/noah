@@ -1,11 +1,16 @@
 name: Fork Signet APK
 
-# Manually triggered, debug-signed Signet APK build on GitHub-hosted runners,
+# Debug-signed Signet APK build on GitHub-hosted runners,
 # for testing a branch on a fork without self-hosted runners or signing secrets.
 # The APK is only stored as a workflow artifact.
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - feat/recurring-payments
+    paths:
+      - .github/workflows/fork-signet-apk.yml
 
 permissions:
   contents: read
